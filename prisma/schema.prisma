@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String   @default("管理员")
+  createdAt    DateTime @default(now())
+}
+
+model Contact {
+  id              String    @id @default(cuid())
+  name            String
+  company         String    @default("")
+  title           String    @default("")
+  email           String?
+  phone           String?
+  country         String    @default("")
+  language        String    @default("")
+  source          String    @default("")
+  icpScore        Int       @default(0)
+  leadTier        String    @default("COLD")
+  productInterest String    @default("")
+  nextAction      String    @default("")
+  quantitySignal  String    @default("")
+  tags            String[]  @default([])
+  stage           String    @default("新线索")
+  notes           String    @default("")
+  lastContactedAt DateTime?
+  doNotContact    Boolean   @default(false)
+  score           Int       @default(0)
+  bantBudget      Boolean   @default(false)
+  bantAuthority   Boolean   @default(false)
+  bantNeed        Boolean   @default(false)
+  bantTimeline    Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  activities         Activity[]
+  enrollments        SequenceEnrollment[]
+  threads            Thread[]
+  campaignRecipients CampaignRecipient[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([stage])
+  @@index([leadTier])
+  @@index([name, company])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  contactId String
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  type      String
+  content   String
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([contactId, createdAt])
+}
+
+model EmailTemplate {
+  id        String     @id @default(cuid())
+  name      String
+  subject   String
+  body      String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  campaigns Campaign[]
+}
+
+model Campaign {
+  id               String              @id @default(cuid())
+  name             String
+  templateId       String
+  template         EmailTemplate       @relation(fields: [templateId], references: [id])
+  segment          Json
+  status           String              @default("draft")
+  rateLimitPerHour Int                 @default(20)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  recipients       CampaignRecipient[]
+}
+
+model CampaignRecipient {
+  id         String    @id @default(cuid())
+  campaignId String
+  campaign   Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId  String
+  contact    Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status     String    @default("queued")
+  sentAt     DateTime?
+  error      String?
+  dryRun     Boolean   @default(false)
+
+  @@unique([campaignId, contactId])
+  @@index([status])
+}
+
+model Sequence {
+  id          String               @id @default(cuid())
+  name        String
+  steps       Json
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  enrollments SequenceEnrollment[]
+}
+
+model SequenceEnrollment {
+  id           String    @id @default(cuid())
+  sequenceId   String
+  sequence     Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status       String    @default("active")
+  currentStep  Int       @default(0)
+  nextRunAt    DateTime?
+  pausedReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([sequenceId, contactId])
+  @@index([status, nextRunAt])
+}
+
+model Thread {
+  id            String    @id @default(cuid())
+  contactId     String
+  contact       Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channel       String
+  subject       String    @default("")
+  lastMessageAt DateTime  @default(now())
+  unread        Boolean   @default(true)
+  messages      Message[]
+
+  @@unique([contactId, channel])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  direction String
+  body      String
+  channel   String
+  createdAt DateTime @default(now())
+
+  @@index([threadId, createdAt])
+}
+
+model Setting {
+  id              String   @id @default("default")
+  brandName       String   @default("建联")
+  industry        String   @default("")
+  targetMarkets   String   @default("")
+  waPhoneNumberId String   @default("")
+  waAccessToken   String   @default("")
+  waVerifyToken   String   @default("jianlian-verify")
+  waApiVersion    String   @default("v21.0")
+  updatedAt       DateTime @updatedAt
+}
+
+model SendLog {
+  id        String   @id @default(cuid())
+  channel   String
+  createdAt DateTime @default(now())
+
+  @@index([channel, createdAt])
+}

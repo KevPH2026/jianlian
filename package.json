@@ -1,0 +1,51 @@
+{
+  "name": "jianlian",
+  "version": "1.0.0",
+  "private": true,
+  "description": "建联 — 自托管联系人 CRM、邮件活动、WhatsApp Cloud API 收件箱与序列自动化",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:push": "prisma db push",
+    "db:seed": "tsx prisma/seed.ts",
+    "worker": "tsx src/worker/index.ts",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.14.0",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.56.0",
+    "imapflow": "^1.0.186",
+    "ioredis": "^5.7.0",
+    "lucide-react": "^0.511.0",
+    "next": "^15.5.0",
+    "next-auth": "^4.24.11",
+    "nodemailer": "^7.0.7",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^22.15.0",
+    "@types/nodemailer": "^7.0.1",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.4",
+    "prisma": "^6.14.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
