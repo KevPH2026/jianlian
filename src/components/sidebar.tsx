@@ -28,6 +28,7 @@ export function Sidebar() {
           建联
         </Link>
         <div className="mt-0.5 text-xs text-slate-400">外联工作台</div>
+        <div className="mt-1 text-[11px] leading-snug text-slate-400">线索 → 约齐 → 提案</div>
       </div>
       <nav className="flex-1 space-y-0.5 px-3">
         {items.map((item) => {

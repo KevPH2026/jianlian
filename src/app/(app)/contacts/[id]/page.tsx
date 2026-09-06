@@ -312,8 +312,13 @@ export default function ContactDetailPage() {
           </div>
           <Textarea defaultValue={c.notes} rows={4} onBlur={(e) => patch({ notes: e.target.value })} />
           {canHandoffProposal(c.stage) ? (
-            <Button onClick={handoffProposal}>交给提案作战</Button>
-          ) : null}
+            <div>
+              <Button onClick={handoffProposal}>交给提案作战</Button>
+              <p className="mt-1.5 text-xs text-slate-500">对齐谈妥后点这里：把 brief 交给提案侧继续跟进。</p>
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">对齐完成后会出现「交给提案作战」。</p>
+          )}
         </Card>
 
         <div className="lg:col-span-2 space-y-4">
@@ -325,7 +330,7 @@ export default function ContactDetailPage() {
                 {activeBooking.meetingUrl ? ` · ${activeBooking.meetingUrl}` : ""}
               </p>
             ) : (
-              <p className="mb-2 text-xs text-slate-500">须填写会议开始时间；成功后阶段→对齐中并暂停序列。</p>
+              <p className="mb-2 text-xs text-slate-500">对方同意开会后在此登记：填开始时间 → 阶段变为「对齐中」，序列自动暂停。</p>
             )}
             <div className="grid gap-2 md:grid-cols-2">
               <div>
@@ -348,10 +353,12 @@ export default function ContactDetailPage() {
                 </>
               )}
             </div>
+            <p className="mt-2 text-xs text-slate-500">用途：把「约到的会」记进本周已约；改期不重复计数，取消则回到跟进中。</p>
           </Card>
 
           <Card>
             <h3 className="mb-2 font-medium">建议下一句</h3>
+            <p className="mb-2 text-xs text-slate-500">按阶段生成可编辑草稿；不会自动外发，确认后再「填入发邮件」或去活动发出。</p>
             <div className="flex flex-wrap gap-2">
               <Select value={suggestIntent} onChange={(e) => setSuggestIntent(e.target.value)}>
                 <option value="">按阶段自动</option>
@@ -434,8 +441,11 @@ export default function ContactDetailPage() {
             </ul>
           </Card>
 
-          <Card>
-            <h3 className="mb-2 font-medium">手动登记回复（IMAP 关闭时）</h3>
+          <Card className="border-amber-100 bg-amber-50/40">
+            <h3 className="mb-1 font-medium">手动登记回复</h3>
+            <p className="mb-2 text-xs text-slate-500">
+              在外部邮箱/微信看到对方回复时，粘贴到这里登记——线索会进「今日 · 该回」，阶段改为已回复并暂停序列。IMAP 未开时必用。
+            </p>
             <Textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="粘贴对方回复内容" />
             <Button className="mt-2" variant="outline" onClick={logReply}>登记回复</Button>
           </Card>

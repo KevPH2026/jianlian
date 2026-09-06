@@ -31,6 +31,7 @@ export default function LoginPage() {
         <div className="mb-6">
           <div className="text-2xl font-semibold tracking-tight text-slate-900">建联</div>
           <p className="mt-1 text-sm text-slate-500">自托管外联工作台</p>
+          <p className="mt-1 text-xs text-slate-400">登录后先看「今日」排工</p>
         </div>
         <label className="block text-sm font-medium text-slate-700">邮箱</label>
         <input
