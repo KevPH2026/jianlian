@@ -18,6 +18,7 @@ export async function getOrCreateSetting(userId: string) {
       brandName: "建联",
       industry: "",
       targetMarkets: "",
+      stalledDays: 5,
       waVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN || "jianlian-verify",
       waApiVersion: process.env.WHATSAPP_API_VERSION || "v21.0",
     },

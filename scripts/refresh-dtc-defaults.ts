@@ -9,6 +9,7 @@ import { PrismaClient } from "@prisma/client";
 import {
   DTC_SETTING,
   INTRO_TEMPLATE,
+  INTENT_TEMPLATES,
   buildDemoContacts,
   DEMO_THREADS,
   daysAgo,
@@ -39,6 +40,40 @@ async function main() {
     },
   });
   console.log("updated Setting →", DTC_SETTING);
+
+  const intentIds: Record<string, string> = {};
+  for (const it of INTENT_TEMPLATES) {
+    let row = await prisma.emailTemplate.findFirst({ where: { name: it.name, userId: admin.id } });
+    if (!row) {
+      row = await prisma.emailTemplate.create({
+        data: { userId: admin.id, name: it.name, subject: it.subject, body: it.body },
+      });
+    } else {
+      row = await prisma.emailTemplate.update({
+        where: { id: row.id },
+        data: { subject: it.subject, body: it.body },
+      });
+    }
+    intentIds[it.intent] = row.id;
+  }
+  const seq = await prisma.sequence.findFirst({ where: { name: "默认 4 触达", userId: admin.id } });
+  if (seq && intentIds["破冰"]) {
+    await prisma.sequence.update({
+      where: { id: seq.id },
+      data: {
+        steps: [
+          { type: "email", templateId: intentIds["破冰"] },
+          { type: "wait", waitDays: 3 },
+          { type: "email", templateId: intentIds["价值"] },
+          { type: "wait", waitDays: 4 },
+          { type: "email", templateId: intentIds["催约"] },
+          { type: "wait", waitDays: 7 },
+          { type: "email", templateId: intentIds["停损"] },
+        ],
+      },
+    });
+  }
+
 
   const tpl = await prisma.emailTemplate.findFirst({
     where: { name: INTRO_TEMPLATE.name, userId: admin.id },

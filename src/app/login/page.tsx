@@ -21,7 +21,7 @@ export default function LoginPage() {
       setError("邮箱或密码不正确");
       return;
     }
-    router.push("/dashboard");
+    router.push("/today");
     router.refresh();
   }
 

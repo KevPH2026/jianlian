@@ -42,6 +42,7 @@
 - IMAP_*：可选入站。关闭时请在联系人页「手动登记回复」
 - WHATSAPP_PHONE_NUMBER_ID / WHATSAPP_ACCESS_TOKEN / WHATSAPP_VERIFY_TOKEN：Cloud API 默认值；也可在「设置」页保存
 - SEND_RATE_PER_HOUR：默认 20
+- PROPOSAL_HANDOFF_WEBHOOK_URL：可选；「交给提案作战」POST brief（未配置仍写入活动时间线）
 
 仓库不提交 `.env` 与密钥。
 
@@ -69,8 +70,9 @@ Next.js App Router（界面 + API）与独立 worker 进程共享 Prisma/Postgre
 
 ## 功能清单
 
-- 邮箱密码登录（种子管理员）
-- 联系人 CRM：阶段（新线索 / 已触达 / 已回复 / 跟进中 / 勿联系）、标签、搜索筛选、批量改阶段/打标签
+- 邮箱密码登录（种子管理员）；登录后默认进入 **今日**
+- 今日：该回 / 该跟 / 该停 + 本周已约 N（AlignmentBooking，取消不计入）
+- 联系人 CRM：阶段（新线索 / 已触达 / 已回复 / 跟进中 / **对齐中** / 勿联系）、登记已约、建议下一句、交给提案作战
 - CSV 导入导出，去重优先级：邮箱 → 电话 → 姓名+公司
 - 联系人详情 + 活动时间线
 - BANT+ICP 分层（热/温/冷），列表展示 ICP 与层级；CRM 含国家/语言/来源/产品意向/下一步
@@ -79,7 +81,8 @@ Next.js App Router（界面 + API）与独立 worker 进程共享 Prisma/Postgre
 - 统一收件箱（邮件 + WhatsApp），回复走 SMTP / Cloud API
 - 入站回复将阶段设为已回复；IMAP 关闭时可手动登记
 - 序列：等待 / 发邮件 / 可选 WhatsApp；手动报名；回复或勿联系自动暂停
-- 仪表盘：阶段计数、近 7 日发送、停滞 5+ 天、已触达未回复、序列待发
+- 仪表盘（次级）：阶段计数、近 7 日发送、停滞（Setting.stalledDays）、本周已约、序列待发
+- 四意图模板 破冰/价值/催约/停损；催约脚注提示登记已约；序列 0/3/7/14 绑定
 
 演示数据均为虚构。
 ## Vercel Deploy

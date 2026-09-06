@@ -2,13 +2,32 @@ import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
 import {
   DTC_SETTING,
-  INTRO_TEMPLATE,
   buildDemoContacts,
   DEMO_THREADS,
   daysAgo,
 } from "../src/lib/dtc-defaults";
+import { INTENT_TEMPLATES } from "../src/lib/intent-templates";
 
 const prisma = new PrismaClient();
+
+async function upsertIntentTemplates(userId: string) {
+  const ids: Record<string, string> = {};
+  for (const t of INTENT_TEMPLATES) {
+    let row = await prisma.emailTemplate.findFirst({ where: { name: t.name, userId } });
+    if (!row) {
+      row = await prisma.emailTemplate.create({
+        data: { userId, name: t.name, subject: t.subject, body: t.body },
+      });
+    } else {
+      row = await prisma.emailTemplate.update({
+        where: { id: row.id },
+        data: { subject: t.subject, body: t.body },
+      });
+    }
+    ids[t.intent] = row.id;
+  }
+  return ids;
+}
 
 async function main() {
   const passwordHash = await bcrypt.hash("admin12345", 10);
@@ -24,55 +43,44 @@ async function main() {
       brandName: DTC_SETTING.brandName,
       industry: DTC_SETTING.industry,
       targetMarkets: DTC_SETTING.targetMarkets,
+      stalledDays: 5,
     },
     create: {
       userId: admin.id,
       brandName: DTC_SETTING.brandName,
       industry: DTC_SETTING.industry,
       targetMarkets: DTC_SETTING.targetMarkets,
+      stalledDays: 5,
       waVerifyToken: "jianlian-verify",
       waApiVersion: "v21.0",
     },
   });
 
-  let tpl = await prisma.emailTemplate.findFirst({ where: { name: INTRO_TEMPLATE.name, userId: admin.id } });
-  if (!tpl) {
-    tpl = await prisma.emailTemplate.create({
-      data: {
-        userId: admin.id,
-        name: INTRO_TEMPLATE.name,
-        subject: INTRO_TEMPLATE.subject,
-        body: INTRO_TEMPLATE.body,
-      },
-    });
-  } else {
-    tpl = await prisma.emailTemplate.update({
-      where: { id: tpl.id },
-      data: { subject: INTRO_TEMPLATE.subject, body: INTRO_TEMPLATE.body },
-    });
-  }
+  const tplIds = await upsertIntentTemplates(admin.id);
 
   let sequence = await prisma.sequence.findFirst({ where: { name: "默认 4 触达", userId: admin.id } });
+  const steps = [
+    { type: "email", templateId: tplIds["破冰"] },
+    { type: "wait", waitDays: 3 },
+    { type: "email", templateId: tplIds["价值"] },
+    { type: "wait", waitDays: 4 },
+    { type: "email", templateId: tplIds["催约"] },
+    { type: "wait", waitDays: 7 },
+    { type: "email", templateId: tplIds["停损"] },
+  ];
   if (!sequence) {
     sequence = await prisma.sequence.create({
-      data: {
-        userId: admin.id,
-        name: "默认 4 触达",
-        steps: [
-          { type: "email", templateId: tpl.id },
-          { type: "wait", waitDays: 3 },
-          { type: "email", templateId: tpl.id },
-          { type: "wait", waitDays: 4 },
-          { type: "email", templateId: tpl.id },
-          { type: "wait", waitDays: 7 },
-          { type: "email", templateId: tpl.id },
-        ],
-      },
+      data: { userId: admin.id, name: "默认 4 触达", steps },
+    });
+  } else {
+    sequence = await prisma.sequence.update({
+      where: { id: sequence.id },
+      data: { steps },
     });
   }
 
   if ((await prisma.contact.count({ where: { userId: admin.id } })) > 0) {
-    console.log("seed: contacts exist, skip demo rows (settings + template refreshed)");
+    console.log("seed: contacts exist, refreshed settings + 四意图模板 + sequence");
     return;
   }
 
@@ -136,7 +144,7 @@ async function main() {
     data: { userId: admin.id, channel: "email", createdAt: daysAgo(6) },
   });
 
-  console.log("seed: admin + DTC demo contacts + intro template + sequence");
+  console.log("seed: admin + DTC demo + 四意图模板 + 0/3/7/14 sequence");
 }
 
 main()

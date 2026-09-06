@@ -5,6 +5,7 @@ import { Button, Card, Input, PageHeader } from "@/components/ui";
 
 type Settings = {
   brand?: { brandName: string; industry: string; targetMarkets: string };
+  stalledDays?: number;
   smtp: { configured: boolean; host: string; port: string; from: string };
   imap: { configured: boolean; host: string };
   whatsapp: {
@@ -15,11 +16,20 @@ type Settings = {
     hasToken: boolean;
     webhookPath: string;
   };
+  proposalHandoff?: { webhookConfigured: boolean };
 };
 
 export default function SettingsPage() {
   const [data, setData] = useState<Settings | null>(null);
-  const [form, setForm] = useState({ brandName: "", industry: "", targetMarkets: "", waPhoneNumberId: "", waAccessToken: "", waVerifyToken: "" });
+  const [form, setForm] = useState({
+    brandName: "",
+    industry: "",
+    targetMarkets: "",
+    stalledDays: "5",
+    waPhoneNumberId: "",
+    waAccessToken: "",
+    waVerifyToken: "",
+  });
   const [hint, setHint] = useState("");
 
   async function load() {
@@ -29,6 +39,7 @@ export default function SettingsPage() {
       brandName: json.brand?.brandName || "",
       industry: json.brand?.industry || "",
       targetMarkets: json.brand?.targetMarkets || "",
+      stalledDays: String(json.stalledDays ?? 5),
       waPhoneNumberId: json.whatsapp?.phoneNumberId || "",
       waAccessToken: "",
       waVerifyToken: json.whatsapp?.verifyToken || "",
@@ -43,21 +54,25 @@ export default function SettingsPage() {
     const res = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        ...form,
+        stalledDays: Number(form.stalledDays),
+      }),
     });
-    setHint(res.ok ? "已保存 WhatsApp 配置" : "保存失败");
+    const json = await res.json();
+    setHint(res.ok ? "已保存" : json.error || "保存失败");
     load();
   }
 
   if (!data) return <p className="text-sm text-slate-500">加载中…</p>;
   return (
     <div>
-      <PageHeader title="设置" subtitle="ICP 客群用于品类/独立站等匹配（不仅是外贸国家）。SMTP 来自环境变量；WhatsApp Cloud API 可在此保存。" />
-      <div className="grid gap-4 md:grid-cols-2">
+      <PageHeader title="设置" subtitle="ICP 客群、停滞天数、SMTP 只读、WhatsApp Cloud API。周「约到对齐」= 本周新建且未取消的 AlignmentBooking（按 createdAt）。" />
+      <form onSubmit={onSave} className="grid gap-4 md:grid-cols-2">
         <Card className="md:col-span-2">
           <h3 className="font-medium">品牌与市场</h3>
-          <p className="mt-1 text-xs text-slate-500">ICP 客群用于客群/品类匹配（独立站、Shopify、美妆等），不仅是外贸国家。消息长度：WhatsApp &lt; 100 词，邮件 &lt; 200 词。</p>
-          <div className="mt-3 grid gap-2 md:grid-cols-3">
+          <p className="mt-1 text-xs text-slate-500">ICP 客群用于客群/品类匹配。消息长度：WhatsApp &lt; 100 词，邮件 &lt; 200 词。</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-4">
             <div>
               <label className="text-xs text-slate-500">品牌</label>
               <Input value={form.brandName} onChange={(e) => setForm({ ...form, brandName: e.target.value })} />
@@ -69,6 +84,16 @@ export default function SettingsPage() {
             <div>
               <label className="text-xs text-slate-500">ICP 客群（逗号分隔）</label>
               <Input value={form.targetMarkets} onChange={(e) => setForm({ ...form, targetMarkets: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-xs text-slate-500">停滞天数（该跟）</label>
+              <Input
+                type="number"
+                min={1}
+                max={90}
+                value={form.stalledDays}
+                onChange={(e) => setForm({ ...form, stalledDays: e.target.value })}
+              />
             </div>
           </div>
         </Card>
@@ -84,18 +109,21 @@ export default function SettingsPage() {
           </dl>
         </Card>
         <Card>
-          <h3 className="font-medium">IMAP 入站</h3>
+          <h3 className="font-medium">IMAP 入站 / 提案 handoff</h3>
           <p className="mt-2 text-sm text-slate-600">
-            {data.imap.configured ? `已配置 ${data.imap.host}` : "未配置。可在联系人页手动登记回复。"}
+            {data.imap.configured ? `IMAP 已配置 ${data.imap.host}` : "IMAP 未配置。可在联系人页手动登记回复。"}
+          </p>
+          <p className="mt-2 text-sm text-slate-600">
+            提案作战 webhook：{data.proposalHandoff?.webhookConfigured ? "已配置 PROPOSAL_HANDOFF_WEBHOOK_URL" : "未配置（交接仍写入活动时间线）"}
           </p>
         </Card>
         <Card className="md:col-span-2">
           <h3 className="font-medium">WhatsApp Cloud API</h3>
           <p className="mt-1 text-sm text-slate-500">
             仅官方 Cloud API。Webhook：<code className="rounded bg-slate-100 px-1">{data.whatsapp.webhookPath}</code>
-            {" "}（GET 验证 + POST 入站）。当前：{data.whatsapp.configured ? "已配置" : "未配置"}
+            {" "}当前：{data.whatsapp.configured ? "已配置" : "未配置"}
           </p>
-          <form onSubmit={onSave} className="mt-4 grid gap-2 md:grid-cols-2">
+          <div className="mt-4 grid gap-2 md:grid-cols-2">
             <div>
               <label className="text-xs text-slate-500">Phone Number ID</label>
               <Input value={form.waPhoneNumberId} onChange={(e) => setForm({ ...form, waPhoneNumberId: e.target.value })} />
@@ -112,9 +140,9 @@ export default function SettingsPage() {
               <Button type="submit">保存</Button>
               {hint ? <span className="ml-3 text-sm text-emerald-700">{hint}</span> : null}
             </div>
-          </form>
+          </div>
         </Card>
-      </div>
+      </form>
     </div>
   );
 }

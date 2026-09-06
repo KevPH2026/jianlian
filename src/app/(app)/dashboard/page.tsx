@@ -11,7 +11,9 @@ type Dash = {
   sendsLast7Days: number;
   unreplied: number;
   stalled?: number;
+  stalledDays?: number;
   sequenceDue?: number;
+  weeklyBookings?: number;
   enrollments: { active: number; paused: number; completed: number };
   recent: Array<{ id: string; type: string; content: string; createdAt: string; contact: { name: string } }>;
 };
@@ -26,7 +28,7 @@ export default function DashboardPage() {
   if (!data) return <p className="text-sm text-slate-500">加载中…</p>;
   return (
     <div>
-      <PageHeader title="仪表盘" subtitle="阶段分布、近 7 日发送、未回复与序列报名" />
+      <PageHeader title="仪表盘" subtitle="次级总览（日常请用「今日」）。阶段分布、近 7 日发送、未回复与序列报名" />
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
         <Card>
           <div className="text-sm text-slate-500">联系人</div>
@@ -46,8 +48,13 @@ export default function DashboardPage() {
           <div className="mt-1 text-xs text-slate-400">暂停 {data.enrollments.paused} · 完成 {data.enrollments.completed}</div>
         </Card>
         <Card>
-          <div className="text-sm text-slate-500">停滞 5+ 天</div>
+          <div className="text-sm text-slate-500">停滞 N+ 天</div>
           <div className="mt-1 text-2xl font-semibold">{data.stalled ?? 0}</div>
+          <div className="mt-1 text-xs text-slate-400">阈值 {data.stalledDays ?? 5} 天</div>
+        </Card>
+        <Card>
+          <div className="text-sm text-slate-500">本周已约</div>
+          <div className="mt-1 text-2xl font-semibold">{data.weeklyBookings ?? 0}</div>
         </Card>
         <Card>
           <div className="text-sm text-slate-500">序列待发</div>

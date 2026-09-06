@@ -26,6 +26,7 @@ export default withAuth(
 
 export const config = {
   matcher: [
+    "/today","/today/:path*",
     "/dashboard","/dashboard/:path*",
     "/contacts/:path*",
     "/inbox/:path*",
@@ -41,6 +42,8 @@ export const config = {
     "/api/inbox/:path*",
     "/api/settings/:path*",
     "/api/dashboard/:path*",
+    "/api/today/:path*",
+    "/api/bookings","/api/bookings/:path*",
     "/api/users","/api/users/:path*",
   ],
 };

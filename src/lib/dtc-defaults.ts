@@ -279,3 +279,6 @@ export const DEMO_THREADS: DemoThreadSeed[] = [
     ],
   },
 ];
+
+
+export { INTENT_TEMPLATES, CUIYUE_FOOTER } from "./intent-templates";

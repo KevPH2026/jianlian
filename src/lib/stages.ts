@@ -1,4 +1,4 @@
-export const STAGES = ["新线索", "已触达", "已回复", "跟进中", "勿联系"] as const;
+export const STAGES = ["新线索", "已触达", "已回复", "跟进中", "对齐中", "勿联系"] as const;
 export type Stage = (typeof STAGES)[number];
 
 export const STAGE_COLORS: Record<Stage, string> = {
@@ -6,8 +6,12 @@ export const STAGE_COLORS: Record<Stage, string> = {
   已触达: "bg-amber-50 text-amber-700 border-amber-200",
   已回复: "bg-emerald-50 text-emerald-700 border-emerald-200",
   跟进中: "bg-violet-50 text-violet-700 border-violet-200",
+  对齐中: "bg-indigo-50 text-indigo-700 border-indigo-200",
   勿联系: "bg-slate-100 text-slate-500 border-slate-200",
 };
+
+export const ALIGNED_STAGE: Stage = "对齐中";
+export const FOLLOWING_STAGE: Stage = "跟进中";
 
 export function isStage(value: string): value is Stage {
   return (STAGES as readonly string[]).includes(value);
@@ -16,4 +20,9 @@ export function isStage(value: string): value is Stage {
 export function normalizeStage(value?: string | null): Stage {
   if (value && isStage(value)) return value;
   return "新线索";
+}
+
+/** Stages where proposal handoff button is shown */
+export function canHandoffProposal(stage: string): boolean {
+  return stage === "已回复" || stage === "对齐中";
 }

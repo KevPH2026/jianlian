@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser, unauthorized } from "@/lib/tenant";
-import { isStage } from "@/lib/stages";
+import { ALIGNED_STAGE, isStage } from "@/lib/stages";
 import { pauseOnDoNotContact } from "@/lib/sequence";
+import { contactHasActiveBooking } from "@/lib/bookings";
 
 export async function POST(req: NextRequest) {
   const user = await requireUser();
@@ -13,6 +14,19 @@ export async function POST(req: NextRequest) {
   const owned = { id: { in: ids }, userId: user.id };
   const action = body.action as string;
   if (action === "stage" && isStage(body.stage)) {
+    if (body.stage === ALIGNED_STAGE) {
+      const missing: string[] = [];
+      for (const id of ids) {
+        const has = await contactHasActiveBooking(user.id, id);
+        if (!has) missing.push(id);
+      }
+      if (missing.length) {
+        return NextResponse.json(
+          { error: "部分联系人无已约记录，无法批量设为对齐中；请先「登记已约」", missing },
+          { status: 400 }
+        );
+      }
+    }
     const result = await prisma.contact.updateMany({ where: owned, data: { stage: body.stage } });
     if (body.stage === "勿联系") {
       await prisma.contact.updateMany({ where: owned, data: { doNotContact: true } });

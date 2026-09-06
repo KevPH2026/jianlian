@@ -3,6 +3,7 @@ export const STAGES = [
   { value: "CONTACTED", label: "已触达" },
   { value: "REPLIED", label: "已回复" },
   { value: "FOLLOWING", label: "跟进中" },
+  { value: "ALIGNED", label: "对齐中" },
   { value: "DO_NOT_CONTACT", label: "勿联系" },
 ] as const;
 
@@ -32,3 +33,6 @@ export const WA_WORD_LIMIT = 100;
 export const DEFAULT_RATE_PER_HOUR = 20;
 
 export const STAGE_SET = new Set<string>(STAGES.map((s) => s.value));
+
+export const INTENT_NAMES = ["破冰", "价值", "催约", "停损"] as const;
+export type IntentName = (typeof INTENT_NAMES)[number];

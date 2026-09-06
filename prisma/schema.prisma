@@ -15,12 +15,13 @@ model User {
   role         String   @default("USER")
   createdAt    DateTime @default(now())
 
-  contacts  Contact[]
-  templates EmailTemplate[]
-  campaigns Campaign[]
-  sequences Sequence[]
-  setting   Setting?
-  sendLogs  SendLog[]
+  contacts          Contact[]
+  templates         EmailTemplate[]
+  campaigns         Campaign[]
+  sequences         Sequence[]
+  setting           Setting?
+  sendLogs          SendLog[]
+  alignmentBookings AlignmentBooking[]
 }
 
 model Contact {
@@ -57,6 +58,7 @@ model Contact {
   enrollments        SequenceEnrollment[]
   threads            Thread[]
   campaignRecipients CampaignRecipient[]
+  alignmentBookings  AlignmentBooking[]
 
   @@index([userId])
   @@index([userId, email])
@@ -64,6 +66,25 @@ model Contact {
   @@index([userId, stage])
   @@index([userId, leadTier])
   @@index([userId, name, company])
+}
+
+model AlignmentBooking {
+  id          String    @id @default(cuid())
+  contactId   String
+  contact     Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scheduledAt DateTime
+  meetingUrl  String?
+  note        String?
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@index([contactId])
+  @@index([userId, cancelledAt, createdAt])
 }
 
 model Activity {
@@ -188,6 +209,7 @@ model Setting {
   brandName       String   @default("建联")
   industry        String   @default("")
   targetMarkets   String   @default("")
+  stalledDays     Int      @default(5)
   waPhoneNumberId String   @default("")
   waAccessToken   String   @default("")
   waVerifyToken   String   @default("jianlian-verify")

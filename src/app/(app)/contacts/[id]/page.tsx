@@ -3,9 +3,18 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Badge, Button, Card, Input, PageHeader, Select, Textarea } from "@/components/ui";
-import { STAGES, STAGE_COLORS, type Stage } from "@/lib/stages";
+import { STAGES, STAGE_COLORS, canHandoffProposal, type Stage } from "@/lib/stages";
 import { formatDate } from "@/lib/utils";
 import { interpolateTemplate } from "@/lib/template";
+import { INTENT_NAMES } from "@/lib/constants";
+
+type Booking = {
+  id: string;
+  scheduledAt: string;
+  meetingUrl: string | null;
+  note: string | null;
+  cancelledAt: string | null;
+};
 
 type Payload = {
   contact: {
@@ -35,9 +44,11 @@ type Payload = {
     activities: Array<{ id: string; type: string; content: string; createdAt: string }>;
     enrollments: Array<{ id: string; status: string; pausedReason: string | null; currentStep: number; sequence: { name: string } }>;
     threads: Array<{ id: string; channel: string; messages: Array<{ id: string; direction: string; body: string; createdAt: string }> }>;
+    alignmentBookings?: Booking[];
   };
   sequences: Array<{ id: string; name: string }>;
   templates: Array<{ id: string; name: string; subject: string; body: string }>;
+  activeBooking?: Booking | null;
 };
 
 export default function ContactDetailPage() {
@@ -51,6 +62,14 @@ export default function ContactDetailPage() {
   const [reply, setReply] = useState("");
   const [seqId, setSeqId] = useState("");
   const [hint, setHint] = useState("");
+  const [error, setError] = useState("");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [meetingUrl, setMeetingUrl] = useState("");
+  const [bookingNote, setBookingNote] = useState("");
+  const [suggestIntent, setSuggestIntent] = useState("");
+  const [suggestDraft, setSuggestDraft] = useState("");
+  const [suggestSubject, setSuggestSubject] = useState("");
+  const [handoffInfo, setHandoffInfo] = useState("");
 
   async function load() {
     const res = await fetch(`/api/contacts/${params.id}`);
@@ -67,13 +86,20 @@ export default function ContactDetailPage() {
   if (!data?.contact) return <p className="text-sm text-slate-500">加载中…</p>;
   const c = data.contact;
   const vars = { name: c.name, company: c.company, title: c.title };
+  const activeBooking = data.activeBooking || c.alignmentBookings?.find((b) => !b.cancelledAt) || null;
 
   async function patch(body: Record<string, unknown>) {
-    await fetch(`/api/contacts/${c.id}`, {
+    setError("");
+    const res = await fetch(`/api/contacts/${c.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "更新失败");
+      return;
+    }
     load();
   }
 
@@ -121,6 +147,101 @@ export default function ContactDetailPage() {
     load();
   }
 
+  async function registerBooking() {
+    setError("");
+    const res = await fetch("/api/bookings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contactId: c.id,
+        scheduledAt,
+        meetingUrl: meetingUrl || null,
+        note: bookingNote || null,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "登记失败");
+      return;
+    }
+    setHint("已登记已约 → 对齐中，序列已暂停");
+    setScheduledAt("");
+    setMeetingUrl("");
+    setBookingNote("");
+    load();
+  }
+
+  async function rescheduleBooking() {
+    if (!activeBooking) return;
+    setError("");
+    const res = await fetch(`/api/bookings/${activeBooking.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scheduledAt: scheduledAt || activeBooking.scheduledAt,
+        meetingUrl: meetingUrl || activeBooking.meetingUrl,
+        note: bookingNote || activeBooking.note,
+      }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "改期失败");
+      return;
+    }
+    setHint("已改期（同一条 Booking，周指标不 +1）");
+    load();
+  }
+
+  async function cancelBooking() {
+    if (!activeBooking) return;
+    const res = await fetch(`/api/bookings/${activeBooking.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cancel: true }),
+    });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "取消失败");
+      return;
+    }
+    setHint("已取消已约 → 跟进中");
+    load();
+  }
+
+  async function loadSuggest() {
+    const sp = suggestIntent ? `?intent=${encodeURIComponent(suggestIntent)}` : "";
+    const json = await fetch(`/api/contacts/${c.id}/suggest${sp}`).then((r) => r.json());
+    setSuggestDraft(json.draft || json.body || "");
+    setSuggestSubject(json.subject || "");
+    setSuggestIntent(json.intent || suggestIntent);
+    setHint("已生成建议下一句（可编辑，不会自动外发）");
+  }
+
+  async function handoffProposal() {
+    setHandoffInfo("");
+    setError("");
+    const res = await fetch(`/api/contacts/${c.id}/proposal-handoff`, { method: "POST" });
+    const json = await res.json();
+    if (!res.ok) {
+      setError(json.error || "handoff 失败");
+      return;
+    }
+    const parts = ["brief 已写入活动时间线"];
+    if (json.delivered?.webhookPosted) parts.push("已 POST 提案作战 webhook");
+    else if (json.delivered?.webhookConfigured) parts.push("webhook 调用失败，可重试");
+    else parts.push("未配置 PROPOSAL_HANDOFF_WEBHOOK_URL（仍已落库）");
+    setHandoffInfo(parts.join(" · "));
+    setHint("已交给提案作战");
+    if (json.briefText && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(json.briefText);
+      } catch {
+        /* clipboard is optional convenience only */
+      }
+    }
+    load();
+  }
+
   return (
     <div>
       <PageHeader
@@ -128,7 +249,9 @@ export default function ContactDetailPage() {
         subtitle={`${c.company} · ${c.title || "无职位"} · ICP ${c.icpScore ?? c.score} · ${c.leadTier === "HOT" ? "热" : c.leadTier === "WARM" ? "温" : "冷"}`}
         actions={<Badge className={STAGE_COLORS[c.stage]}>{c.stage}</Badge>}
       />
-      {hint ? <p className="mb-4 text-sm text-emerald-700">{hint}</p> : null}
+      {hint ? <p className="mb-2 text-sm text-emerald-700">{hint}</p> : null}
+      {handoffInfo ? <p className="mb-2 text-sm text-indigo-700">{handoffInfo}</p> : null}
+      {error ? <p className="mb-2 text-sm text-red-600">{error}</p> : null}
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1 space-y-3 text-sm">
           <div>
@@ -156,7 +279,16 @@ export default function ContactDetailPage() {
               <Badge key={t} className="border-slate-200">{t}</Badge>
             ))}
           </div>
-          <Select value={c.stage} onChange={(e) => patch({ stage: e.target.value })}>
+          <Select
+            value={c.stage}
+            onChange={(e) => {
+              if (e.target.value === "对齐中" && !activeBooking) {
+                setError("请先「登记已约」后再进入对齐中");
+                return;
+              }
+              patch({ stage: e.target.value });
+            }}
+          >
             {STAGES.map((s) => (
               <option key={s}>{s}</option>
             ))}
@@ -179,9 +311,70 @@ export default function ContactDetailPage() {
             ))}
           </div>
           <Textarea defaultValue={c.notes} rows={4} onBlur={(e) => patch({ notes: e.target.value })} />
+          {canHandoffProposal(c.stage) ? (
+            <Button onClick={handoffProposal}>交给提案作战</Button>
+          ) : null}
         </Card>
 
         <div className="lg:col-span-2 space-y-4">
+          <Card>
+            <h3 className="mb-2 font-medium">登记已约</h3>
+            {activeBooking ? (
+              <p className="mb-2 text-sm text-indigo-700">
+                当前已约：{formatDate(activeBooking.scheduledAt)}
+                {activeBooking.meetingUrl ? ` · ${activeBooking.meetingUrl}` : ""}
+              </p>
+            ) : (
+              <p className="mb-2 text-xs text-slate-500">须填写会议开始时间；成功后阶段→对齐中并暂停序列。</p>
+            )}
+            <div className="grid gap-2 md:grid-cols-2">
+              <div>
+                <label className="text-xs text-slate-500">开始时间 *</label>
+                <Input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">会议链接</label>
+                <Input value={meetingUrl} onChange={(e) => setMeetingUrl(e.target.value)} placeholder="https://" />
+              </div>
+            </div>
+            <Textarea className="mt-2" rows={2} placeholder="备注" value={bookingNote} onChange={(e) => setBookingNote(e.target.value)} />
+            <div className="mt-2 flex flex-wrap gap-2">
+              {!activeBooking ? (
+                <Button onClick={registerBooking} disabled={!scheduledAt}>登记已约</Button>
+              ) : (
+                <>
+                  <Button onClick={rescheduleBooking}>改期（同条）</Button>
+                  <Button variant="outline" onClick={cancelBooking}>取消已约</Button>
+                </>
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <h3 className="mb-2 font-medium">建议下一句</h3>
+            <div className="flex flex-wrap gap-2">
+              <Select value={suggestIntent} onChange={(e) => setSuggestIntent(e.target.value)}>
+                <option value="">按阶段自动</option>
+                {INTENT_NAMES.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+              </Select>
+              <Button variant="outline" onClick={loadSuggest}>生成草稿</Button>
+              <Button
+                onClick={() => {
+                  setEmailSubject(suggestSubject);
+                  setEmailBody(suggestDraft);
+                  setHint("已填入发邮件区，可继续编辑后发送");
+                }}
+                disabled={!suggestDraft}
+              >
+                填入发邮件
+              </Button>
+            </div>
+            <Input className="mt-2" placeholder="建议主题" value={suggestSubject} onChange={(e) => setSuggestSubject(e.target.value)} />
+            <Textarea className="mt-2" rows={6} placeholder="点击生成草稿（不会空白）" value={suggestDraft} onChange={(e) => setSuggestDraft(e.target.value)} />
+          </Card>
+
           <Card>
             <h3 className="mb-2 font-medium">发邮件</h3>
             <Select

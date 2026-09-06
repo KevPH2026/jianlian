@@ -2,14 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireUser, unauthorized } from "@/lib/tenant";
 import { STAGES } from "@/lib/stages";
+import { getStalledDays } from "@/lib/today";
+import { countWeeklyBookings } from "@/lib/bookings";
 
 export async function GET() {
   const user = await requireUser();
   if (!user) return unauthorized();
   const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const stalledBefore = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+  const stalledDays = await getStalledDays(user.id);
+  const stalledBefore = new Date(Date.now() - stalledDays * 24 * 60 * 60 * 1000);
   const owned = { userId: user.id };
-  const [contacts, sends, unreplied, enrollActive, enrollPaused, enrollCompleted, stalled, sequenceDue] =
+  const [contacts, sends, unreplied, enrollActive, enrollPaused, enrollCompleted, stalled, sequenceDue, weeklyBookings] =
     await Promise.all([
       prisma.contact.groupBy({ by: ["stage"], where: owned, _count: { _all: true } }),
       prisma.sendLog.count({ where: { userId: user.id, createdAt: { gte: since } } }),
@@ -31,6 +34,7 @@ export async function GET() {
       prisma.sequenceEnrollment.count({
         where: { status: "active", nextRunAt: { lte: new Date() }, sequence: owned },
       }),
+      countWeeklyBookings(user.id),
     ]);
   const byStage = Object.fromEntries(STAGES.map((s) => [s, 0]));
   for (const row of contacts) byStage[row.stage] = row._count._all;
@@ -50,7 +54,9 @@ export async function GET() {
     enrollments: enroll,
     recent,
     stalled,
+    stalledDays,
     sequenceDue,
+    weeklyBookings,
     sends7d: sends,
     total: totalContacts,
     stageCounts: byStage,
