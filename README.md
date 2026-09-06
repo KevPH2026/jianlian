@@ -2,6 +2,8 @@
 
 自托管外联工作台：联系人 CRM、邮件活动、官方 WhatsApp Cloud API 收件箱、序列自动化。单一 PostgreSQL 联系人库，统一收件箱。
 
+> **默认 ICP / 种子数据**：面向 DTC 品牌增长线索（`dtc.lab` / 独立站与品类客群），不是中国出口/汽车后市场外贸 SDR。生产库刷新可用 `DATABASE_URL=... npx tsx scripts/refresh-dtc-defaults.ts`。
+
 **不包含** 社交抓取、非官方 WhatsApp（Baileys / WAHA / Evolution）、LinkedIn 自动加好友。
 
 ## 本地运行

@@ -52,11 +52,11 @@ export default function SettingsPage() {
   if (!data) return <p className="text-sm text-slate-500">加载中…</p>;
   return (
     <div>
-      <PageHeader title="设置" subtitle="SMTP 来自环境变量；WhatsApp Cloud API 可在此保存。" />
+      <PageHeader title="设置" subtitle="ICP 客群用于品类/独立站等匹配（不仅是外贸国家）。SMTP 来自环境变量；WhatsApp Cloud API 可在此保存。" />
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="md:col-span-2">
           <h3 className="font-medium">品牌与市场</h3>
-          <p className="mt-1 text-xs text-slate-500">用于 ICP 目标市场匹配。消息长度：WhatsApp &lt; 100 词，邮件 &lt; 200 词。</p>
+          <p className="mt-1 text-xs text-slate-500">ICP 客群用于客群/品类匹配（独立站、Shopify、美妆等），不仅是外贸国家。消息长度：WhatsApp &lt; 100 词，邮件 &lt; 200 词。</p>
           <div className="mt-3 grid gap-2 md:grid-cols-3">
             <div>
               <label className="text-xs text-slate-500">品牌</label>
@@ -67,7 +67,7 @@ export default function SettingsPage() {
               <Input value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
             </div>
             <div>
-              <label className="text-xs text-slate-500">目标市场（逗号分隔）</label>
+              <label className="text-xs text-slate-500">ICP 客群（逗号分隔）</label>
               <Input value={form.targetMarkets} onChange={(e) => setForm({ ...form, targetMarkets: e.target.value })} />
             </div>
           </div>

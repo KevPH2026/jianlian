@@ -20,7 +20,9 @@ export type ScoreInput = {
   bantTimeline?: boolean;
 };
 
-const TITLE_RE = /(ceo|founder|负责人|vp|director|采购|老板|总监|purchas|procure|manager)/i;
+/** DTC decision makers first; 采购/procure kept secondary. */
+const TITLE_RE =
+  /(ceo|founder|cmo|growth|marketing|brand|主理人|品牌|vp|director|负责人|head of|manager|老板|总监|采购|purchas|procure)/i;
 
 export function bantCount(b: BantFlags): number {
   return [b.budget, b.authority, b.need, b.timeline].filter(Boolean).length;
@@ -35,22 +37,36 @@ export function leadTierFromBantIcp(bant: number, icp: number): "HOT" | "WARM" |
   return "WARM";
 }
 
+function parseMarkets(targetMarkets?: string[] | string | null): string[] {
+  return Array.isArray(targetMarkets)
+    ? targetMarkets
+    : String(targetMarkets || "")
+        .split(/[,，]/)
+        .map((x) => x.trim())
+        .filter(Boolean);
+}
+
+/** Match ICP segment against country OR loosely in productInterest/company. */
+function marketsMatch(input: ScoreInput, markets: string[]): boolean {
+  if (!markets.length) return false;
+  const blobs = [input.country, input.productInterest, input.company]
+    .map((x) => String(x || "").toLowerCase())
+    .filter(Boolean);
+  if (!blobs.length) return false;
+  return markets.some((m) => {
+    const mm = m.toLowerCase();
+    return blobs.some((b) => b.includes(mm) || mm.includes(b));
+  });
+}
+
 export function suggestIcpScore(input: ScoreInput): number {
   let s = 3;
   if (input.title && TITLE_RE.test(String(input.title))) s += 2;
   if (input.company?.trim()) s += 1;
   if (input.email && String(input.email).includes("@")) s += 1;
   if (input.productInterest?.trim()) s += 1;
-  const markets = Array.isArray(input.targetMarkets)
-    ? input.targetMarkets
-    : String(input.targetMarkets || "")
-        .split(/[,，]/)
-        .map((x) => x.trim())
-        .filter(Boolean);
-  const country = (input.country || "").toLowerCase();
-  if (country && markets.some((m) => country.includes(m.toLowerCase()) || m.toLowerCase().includes(country))) {
-    s += 2;
-  }
+  const markets = parseMarkets(input.targetMarkets);
+  if (marketsMatch(input, markets)) s += 2;
   return Math.max(0, Math.min(10, s));
 }
 
