@@ -1,12 +1,6 @@
-import { Queue, Worker } from "bullmq";
 import { processCampaigns, processDueSequences } from "../lib/send";
-import { findContactByEmail, recordInboundReply } from "../lib/inbox";
-
-function redisConnection() {
-  const url = process.env.REDIS_URL || "redis://127.0.0.1:6379";
-  const u = new URL(url);
-  return { host: u.hostname, port: Number(u.port || 6379) };
-}
+import { findContactsByEmail, recordInboundReply } from "../lib/inbox";
+import { hasRedis, redisConnectionFromEnv } from "../lib/queue";
 
 async function tick() {
   const seq = await processDueSequences(20);
@@ -40,8 +34,8 @@ async function pollImap() {
       for await (const msg of client.fetch(ids, { envelope: true, source: true })) {
         const from = msg.envelope?.from?.[0]?.address || "";
         const subject = msg.envelope?.subject || "";
-        const contact = from ? await findContactByEmail(from) : null;
-        if (contact) {
+        const contacts = from ? await findContactsByEmail(from) : [];
+        for (const contact of contacts) {
           const body = `主题: ${subject}`;
           await recordInboundReply({
             contactId: contact.id,
@@ -64,21 +58,30 @@ async function pollImap() {
 
 async function main() {
   console.log("建联 worker 启动");
-  const connection = redisConnection();
-  const queue = new Queue("jianlian-send", { connection });
-  await queue.add("tick", {}, { repeat: { every: 15_000 }, removeOnComplete: 50, removeOnFail: 50 });
+  let worker: { close: () => Promise<void> } | null = null;
+  let queue: { close: () => Promise<void> } | null = null;
 
-  const worker = new Worker(
-    "jianlian-send",
-    async () => {
-      await tick();
-    },
-    { connection, concurrency: 1 }
-  );
-
-  worker.on("failed", (job, err) => {
-    console.error("job failed", job?.name, err);
-  });
+  const connection = redisConnectionFromEnv();
+  if (connection && hasRedis()) {
+    const { Queue, Worker } = await import("bullmq");
+    const q = new Queue("jianlian-send", { connection });
+    queue = q;
+    await q.add("tick", {}, { repeat: { every: 15_000 }, removeOnComplete: 50, removeOnFail: 50 });
+    const w = new Worker(
+      "jianlian-send",
+      async () => {
+        await tick();
+      },
+      { connection, concurrency: 1 }
+    );
+    worker = w;
+    w.on("failed", (job, err) => {
+      console.error("job failed", job?.name, err);
+    });
+    console.log("[worker] BullMQ connected via REDIS_URL");
+  } else {
+    console.warn("[worker] REDIS_URL missing — polling with setInterval only (no BullMQ)");
+  }
 
   await tick();
   setInterval(() => {
@@ -86,8 +89,8 @@ async function main() {
   }, 20_000);
 
   const shutdown = async () => {
-    await worker.close();
-    await queue.close();
+    if (worker) await worker.close();
+    if (queue) await queue.close();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

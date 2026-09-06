@@ -2,20 +2,34 @@ import { prisma } from "./prisma";
 import { digitsPhone, phonesMatch } from "./utils";
 import { applyInboundReply } from "./sequence";
 
-export async function findContactByPhone(phone: string) {
+export async function findContactByPhone(phone: string, userId: string) {
   const digits = digitsPhone(phone);
   if (!digits) return null;
   const contacts = await prisma.contact.findMany({
-    where: { phone: { not: null } },
+    where: { userId, phone: { not: null } },
   });
   return contacts.find((c) => phonesMatch(c.phone, digits)) || null;
 }
 
-export async function findContactByEmail(email: string) {
+export async function findContactByEmail(email: string, userId?: string) {
   const e = email.trim().toLowerCase();
   if (!e) return null;
   return prisma.contact.findFirst({
-    where: { email: { equals: e, mode: "insensitive" } },
+    where: {
+      email: { equals: e, mode: "insensitive" },
+      ...(userId ? { userId } : {}),
+    },
+  });
+}
+
+export async function findContactsByEmail(email: string, userId?: string) {
+  const e = email.trim().toLowerCase();
+  if (!e) return [];
+  return prisma.contact.findMany({
+    where: {
+      email: { equals: e, mode: "insensitive" },
+      ...(userId ? { userId } : {}),
+    },
   });
 }
 
@@ -113,6 +127,7 @@ export async function recordOutbound(opts: {
   subject?: string;
   dryRun?: boolean;
   activityType?: string;
+  userId?: string;
 }) {
   await upsertThreadMessage({
     contactId: opts.contactId,
@@ -121,7 +136,7 @@ export async function recordOutbound(opts: {
     body: opts.dryRun ? `[dry-run] ${opts.body}` : opts.body,
     subject: opts.subject,
   });
-  await prisma.contact.update({
+  const updated = await prisma.contact.update({
     where: { id: opts.contactId },
     data: {
       lastContactedAt: new Date(),
@@ -136,5 +151,7 @@ export async function recordOutbound(opts: {
       meta: { channel: opts.channel, dryRun: Boolean(opts.dryRun) },
     },
   });
-  await prisma.sendLog.create({ data: { channel: opts.channel } });
+  await prisma.sendLog.create({
+    data: { channel: opts.channel, userId: opts.userId || updated.userId },
+  });
 }

@@ -7,9 +7,9 @@ export type Segment = {
   all?: boolean;
 };
 
-export function segmentToWhere(segment: Segment): Prisma.ContactWhereInput {
-  if (segment.all) return { doNotContact: false };
-  const where: Prisma.ContactWhereInput = { doNotContact: false };
+export function segmentToWhere(segment: Segment, userId: string): Prisma.ContactWhereInput {
+  const where: Prisma.ContactWhereInput = { userId, doNotContact: false };
+  if (segment.all) return where;
   const and: Prisma.ContactWhereInput[] = [];
   if (segment.stage) and.push({ stage: segment.stage });
   if (segment.tag) and.push({ tags: { has: segment.tag } });

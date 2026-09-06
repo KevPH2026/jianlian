@@ -3,9 +3,10 @@ import { leadScoreAndTier, scoreContact } from "./scoring";
 import { dedupContacts, parseContactCsv, type CsvContactRow } from "./csv";
 import { normalizeStage } from "./stages";
 
-export async function importCsv(text: string) {
+export async function importCsv(text: string, userId: string) {
   const rows = parseContactCsv(text);
   const existing = await prisma.contact.findMany({
+    where: { userId },
     select: { id: true, name: true, company: true, email: true, phone: true, tags: true, notes: true },
   });
   const { creates, updates, skipped } = dedupContacts(rows, existing);
@@ -15,6 +16,7 @@ export async function importCsv(text: string) {
     const scored = leadScoreAndTier(row);
     const contact = await prisma.contact.create({
       data: {
+        userId,
         name: row.name,
         company: row.company,
         title: row.title,

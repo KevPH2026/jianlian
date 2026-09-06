@@ -1,32 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser, unauthorized } from "@/lib/session";
+import { notFound, requireUser, unauthorized } from "@/lib/tenant";
 import { buildContactData } from "@/lib/contacts";
 import { pauseOnDoNotContact } from "@/lib/sequence";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  if (!(await requireUser())) return unauthorized();
+  const user = await requireUser();
+  if (!user) return unauthorized();
   const { id } = await ctx.params;
-  const contact = await prisma.contact.findUnique({
-    where: { id },
+  const contact = await prisma.contact.findFirst({
+    where: { id, userId: user.id },
     include: {
       activities: { orderBy: { createdAt: "desc" }, take: 100 },
       threads: { include: { messages: { orderBy: { createdAt: "asc" } } } },
       enrollments: { include: { sequence: true } },
     },
   });
-  if (!contact) return NextResponse.json({ error: "不存在" }, { status: 404 });
-  const sequences = await prisma.sequence.findMany({ orderBy: { createdAt: "desc" } });
-  const templates = await prisma.emailTemplate.findMany({ orderBy: { createdAt: "desc" } });
+  if (!contact) return notFound();
+  const sequences = await prisma.sequence.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } });
+  const templates = await prisma.emailTemplate.findMany({ where: { userId: user.id }, orderBy: { createdAt: "desc" } });
   return NextResponse.json({ contact, sequences, templates });
 }
 
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  if (!(await requireUser())) return unauthorized();
+  const user = await requireUser();
+  if (!user) return unauthorized();
   const { id } = await ctx.params;
   const body = await req.json();
-  const prev = await prisma.contact.findUnique({ where: { id } });
-  if (!prev) return NextResponse.json({ error: "不存在" }, { status: 404 });
+  const prev = await prisma.contact.findFirst({ where: { id, userId: user.id } });
+  if (!prev) return notFound();
   const data = buildContactData({
     name: body.name ?? prev.name,
     company: body.company ?? prev.company,
@@ -59,8 +61,11 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
 }
 
 export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  if (!(await requireUser())) return unauthorized();
+  const user = await requireUser();
+  if (!user) return unauthorized();
   const { id } = await ctx.params;
+  const prev = await prisma.contact.findFirst({ where: { id, userId: user.id } });
+  if (!prev) return notFound();
   await prisma.contact.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

@@ -80,3 +80,13 @@ Next.js App Router（界面 + API）与独立 worker 进程共享 Prisma/Postgre
 - 仪表盘：阶段计数、近 7 日发送、停滞 5+ 天、已触达未回复、序列待发
 
 演示数据均为虚构。
+## Vercel Deploy
+See package.json build/postinstall for prisma generate.
+1. Connect repo KevPH2026/jianlian as Next.js on Vercel.
+2. Build runs prisma generate before next build.
+3. Apply schema with prisma db push before first use.
+4. Env: DATABASE_URL, NEXTAUTH_URL, NEXTAUTH_SECRET, CRON_SECRET.
+5. REDIS_URL optional; no Redis at import; enqueue soft-skips; cron ticks.
+6. vercel.json cron every 5 min for sequences route.
+7. Seed admin after DB ready (db:seed script).
+Multi-user isolation by userId; ADMIN-only users UI.

@@ -6,11 +6,28 @@ export type WhatsAppConfig = {
   accessToken: string;
   verifyToken: string;
   apiVersion: string;
+  userId?: string;
 };
 
-export async function getWhatsAppConfig(): Promise<WhatsAppConfig> {
-  const row = await prisma.setting.findUnique({ where: { id: "default" } });
+export async function getOrCreateSetting(userId: string) {
+  return prisma.setting.upsert({
+    where: { userId },
+    update: {},
+    create: {
+      userId,
+      brandName: "建联",
+      industry: "",
+      targetMarkets: "",
+      waVerifyToken: process.env.WHATSAPP_VERIFY_TOKEN || "jianlian-verify",
+      waApiVersion: process.env.WHATSAPP_API_VERSION || "v21.0",
+    },
+  });
+}
+
+export async function getWhatsAppConfig(userId?: string): Promise<WhatsAppConfig> {
+  const row = userId ? await prisma.setting.findUnique({ where: { userId } }) : null;
   return {
+    userId,
     phoneNumberId: row?.waPhoneNumberId || process.env.WHATSAPP_PHONE_NUMBER_ID || "",
     accessToken: row?.waAccessToken || process.env.WHATSAPP_ACCESS_TOKEN || "",
     verifyToken: row?.waVerifyToken || process.env.WHATSAPP_VERIFY_TOKEN || "jianlian-verify",
@@ -18,16 +35,32 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig> {
   };
 }
 
+export async function findSettingsByVerifyToken(token: string) {
+  const t = (token || "").trim();
+  if (!t) return [];
+  return prisma.setting.findMany({ where: { waVerifyToken: t } });
+}
+
+export async function findSettingsByPhoneNumberId(phoneNumberId: string) {
+  const id = (phoneNumberId || "").trim();
+  if (!id) return [];
+  return prisma.setting.findMany({ where: { waPhoneNumberId: id } });
+}
+
 export function isWhatsAppConfigured(cfg: WhatsAppConfig): boolean {
   return Boolean(cfg.phoneNumberId && cfg.accessToken);
 }
 
-export async function sendWhatsAppText(toPhone: string, body: string): Promise<{
+export async function sendWhatsAppText(
+  toPhone: string,
+  body: string,
+  userId?: string
+): Promise<{
   ok: boolean;
   error?: string;
   messageId?: string;
 }> {
-  const cfg = await getWhatsAppConfig();
+  const cfg = await getWhatsAppConfig(userId);
   if (!isWhatsAppConfigured(cfg)) {
     return { ok: false, error: "未配置" };
   }
@@ -62,6 +95,7 @@ export type InboundWa = {
   from: string;
   body: string;
   messageId?: string;
+  phoneNumberId?: string;
 };
 
 export function parseWhatsAppWebhook(payload: unknown): InboundWa[] {
@@ -70,6 +104,7 @@ export function parseWhatsAppWebhook(payload: unknown): InboundWa[] {
     entry?: Array<{
       changes?: Array<{
         value?: {
+          metadata?: { phone_number_id?: string };
           messages?: Array<{ from?: string; id?: string; text?: { body?: string }; type?: string }>;
         };
       }>;
@@ -77,10 +112,11 @@ export function parseWhatsAppWebhook(payload: unknown): InboundWa[] {
   };
   for (const entry of body?.entry || []) {
     for (const change of entry.changes || []) {
+      const phoneNumberId = change.value?.metadata?.phone_number_id || "";
       for (const msg of change.value?.messages || []) {
         const text = msg.text?.body || "";
         if (msg.from && text) {
-          out.push({ from: msg.from, body: text, messageId: msg.id });
+          out.push({ from: msg.from, body: text, messageId: msg.id, phoneNumberId });
         }
       }
     }

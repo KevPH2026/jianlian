@@ -18,6 +18,8 @@ const NAV = [
 export function Sidebar() {
   const pathname = usePathname();
   const { data } = useSession();
+  const role = data?.user?.role;
+  const items = role === "ADMIN" ? [...NAV, { href: "/users", label: "账号" }] : NAV;
   return (
     <aside className="flex h-screen w-56 shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="px-5 py-5">
@@ -27,7 +29,7 @@ export function Sidebar() {
         <div className="mt-0.5 text-xs text-slate-400">外联工作台</div>
       </div>
       <nav className="flex-1 space-y-0.5 px-3">
-        {NAV.map((item) => {
+        {items.map((item) => {
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (
             <Link
@@ -45,6 +47,7 @@ export function Sidebar() {
       </nav>
       <div className="border-t border-slate-100 px-4 py-4 text-xs text-slate-500">
         <div className="truncate">{data?.user?.email}</div>
+        {role ? <div className="mt-0.5 text-slate-400">{role === "ADMIN" ? "管理员" : "用户"}</div> : null}
         <button className="mt-2 text-slate-400 hover:text-slate-700" onClick={() => signOut({ callbackUrl: "/login" })}>
           退出
         </button>

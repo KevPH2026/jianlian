@@ -5,14 +5,14 @@ import { parseSteps, advanceAfterStep, pauseOnDoNotContact } from "./sequence";
 import { interpolateTemplate } from "./template";
 import { getWhatsAppConfig, isWhatsAppConfigured, sendWhatsAppText } from "./whatsapp";
 
-export async function sentInLastHour(): Promise<number> {
+export async function sentInLastHour(userId: string): Promise<number> {
   const since = new Date(Date.now() - 60 * 60 * 1000);
-  return prisma.sendLog.count({ where: { createdAt: { gte: since } } });
+  return prisma.sendLog.count({ where: { userId, createdAt: { gte: since } } });
 }
 
-export async function remainingQuota(limit?: number): Promise<number> {
+export async function remainingQuota(userId: string, limit?: number): Promise<number> {
   const cap = limit ?? hourlyLimit();
-  const used = await sentInLastHour();
+  const used = await sentInLastHour(userId);
   return Math.max(0, cap - used);
 }
 
@@ -20,14 +20,16 @@ export async function processCampaigns(maxN = 20): Promise<number> {
   const campaigns = await prisma.campaign.findMany({ where: { status: "sending" } });
   let processed = 0;
   for (const campaign of campaigns) {
-    const left = await remainingQuota(campaign.rateLimitPerHour);
-    if (left <= 0) break;
+    const left = await remainingQuota(campaign.userId, campaign.rateLimitPerHour);
+    if (left <= 0) continue;
     const recipients = await prisma.campaignRecipient.findMany({
       where: { campaignId: campaign.id, status: "queued" },
       include: { contact: true },
       take: Math.min(left, maxN - processed),
     });
-    const template = await prisma.emailTemplate.findUnique({ where: { id: campaign.templateId } });
+    const template = await prisma.emailTemplate.findFirst({
+      where: { id: campaign.templateId, userId: campaign.userId },
+    });
     if (!template) continue;
     for (const rec of recipients) {
       if (processed >= maxN) return processed;
@@ -66,6 +68,7 @@ export async function processCampaigns(maxN = 20): Promise<number> {
         subject: result.subject,
         body: result.body,
         dryRun: result.dryRun,
+        userId: campaign.userId,
       });
       processed++;
     }
@@ -119,7 +122,9 @@ export async function processDueSequences(maxN = 20): Promise<number> {
         break;
       }
       if (step.type === "email") {
-        const tpl = await prisma.emailTemplate.findUnique({ where: { id: step.templateId } });
+        const tpl = await prisma.emailTemplate.findFirst({
+          where: { id: step.templateId, userId: contact.userId },
+        });
         if (!tpl || !contact.email) {
           const adv = advanceAfterStep(current, steps, new Date());
           current = { ...current, ...adv };
@@ -131,7 +136,7 @@ export async function processDueSequences(maxN = 20): Promise<number> {
           if (adv.nextRunAt && adv.nextRunAt.getTime() > Date.now() + 1000) break;
           continue;
         }
-        const quota = await remainingQuota();
+        const quota = await remainingQuota(contact.userId);
         if (quota <= 0) break;
         const result = await sendEmail({
           to: contact.email,
@@ -150,6 +155,7 @@ export async function processDueSequences(maxN = 20): Promise<number> {
             subject: result.subject,
             body: result.body,
             dryRun: result.dryRun,
+            userId: contact.userId,
           });
         }
         const adv = advanceAfterStep(current, steps, new Date());
@@ -163,12 +169,12 @@ export async function processDueSequences(maxN = 20): Promise<number> {
         continue;
       }
       if (step.type === "whatsapp") {
-        const cfg = await getWhatsAppConfig();
+        const cfg = await getWhatsAppConfig(contact.userId);
         const text = interpolateTemplate(step.body, contact);
         if (isWhatsAppConfigured(cfg) && contact.phone && text) {
-          const result = await sendWhatsAppText(contact.phone, text);
+          const result = await sendWhatsAppText(contact.phone, text, contact.userId);
           if (result.ok) {
-            await recordOutbound({ contactId: contact.id, channel: "whatsapp", body: text });
+            await recordOutbound({ contactId: contact.id, channel: "whatsapp", body: text, userId: contact.userId });
           }
         }
         const adv = advanceAfterStep(current, steps, new Date());

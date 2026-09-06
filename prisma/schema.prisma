@@ -12,11 +12,21 @@ model User {
   email        String   @unique
   passwordHash String
   name         String   @default("管理员")
+  role         String   @default("USER")
   createdAt    DateTime @default(now())
+
+  contacts  Contact[]
+  templates EmailTemplate[]
+  campaigns Campaign[]
+  sequences Sequence[]
+  setting   Setting?
+  sendLogs  SendLog[]
 }
 
 model Contact {
   id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name            String
   company         String    @default("")
   title           String    @default("")
@@ -48,11 +58,12 @@ model Contact {
   threads            Thread[]
   campaignRecipients CampaignRecipient[]
 
-  @@index([email])
-  @@index([phone])
-  @@index([stage])
-  @@index([leadTier])
-  @@index([name, company])
+  @@index([userId])
+  @@index([userId, email])
+  @@index([userId, phone])
+  @@index([userId, stage])
+  @@index([userId, leadTier])
+  @@index([userId, name, company])
 }
 
 model Activity {
@@ -69,16 +80,22 @@ model Activity {
 
 model EmailTemplate {
   id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
   subject   String
   body      String
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   campaigns Campaign[]
+
+  @@index([userId])
 }
 
 model Campaign {
   id               String              @id @default(cuid())
+  userId           String
+  user             User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   name             String
   templateId       String
   template         EmailTemplate       @relation(fields: [templateId], references: [id])
@@ -88,6 +105,9 @@ model Campaign {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   recipients       CampaignRecipient[]
+
+  @@index([userId])
+  @@index([userId, status])
 }
 
 model CampaignRecipient {
@@ -107,11 +127,15 @@ model CampaignRecipient {
 
 model Sequence {
   id          String               @id @default(cuid())
+  userId      String
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   steps       Json
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
   enrollments SequenceEnrollment[]
+
+  @@index([userId])
 }
 
 model SequenceEnrollment {
@@ -158,7 +182,9 @@ model Message {
 }
 
 model Setting {
-  id              String   @id @default("default")
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   brandName       String   @default("建联")
   industry        String   @default("")
   targetMarkets   String   @default("")
@@ -167,12 +193,17 @@ model Setting {
   waVerifyToken   String   @default("jianlian-verify")
   waApiVersion    String   @default("v21.0")
   updatedAt       DateTime @updatedAt
+
+  @@index([waVerifyToken])
+  @@index([waPhoneNumberId])
 }
 
 model SendLog {
   id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   channel   String
   createdAt DateTime @default(now())
 
-  @@index([channel, createdAt])
+  @@index([userId, channel, createdAt])
 }

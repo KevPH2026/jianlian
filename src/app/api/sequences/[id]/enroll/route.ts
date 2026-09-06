@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser, unauthorized } from "@/lib/session";
+import { notFound, requireUser, unauthorized } from "@/lib/tenant";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  if (!(await requireUser())) return unauthorized();
+  const user = await requireUser();
+  if (!user) return unauthorized();
   const { id } = await ctx.params;
-  const sequence = await prisma.sequence.findUnique({ where: { id } });
-  if (!sequence) return NextResponse.json({ error: "不存在" }, { status: 404 });
+  const sequence = await prisma.sequence.findFirst({ where: { id, userId: user.id } });
+  if (!sequence) return notFound();
   const body = await req.json();
   const contactIds: string[] = body.contactIds || (body.contactId ? [body.contactId] : []);
   if (!contactIds.length) return NextResponse.json({ error: "请选择联系人" }, { status: 400 });
   const created = [];
   for (const contactId of contactIds) {
-    const contact = await prisma.contact.findUnique({ where: { id: contactId } });
+    const contact = await prisma.contact.findFirst({ where: { id: contactId, userId: user.id } });
     if (!contact || contact.doNotContact) continue;
     const enrollment = await prisma.sequenceEnrollment.upsert({
       where: { sequenceId_contactId: { sequenceId: id, contactId } },

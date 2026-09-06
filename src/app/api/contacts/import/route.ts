@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireUser, unauthorized } from "@/lib/session";
+import { requireUser, unauthorized } from "@/lib/tenant";
 import { importCsv } from "@/lib/contacts";
 
 export async function POST(req: NextRequest) {
-  if (!(await requireUser())) return unauthorized();
+  const user = await requireUser();
+  if (!user) return unauthorized();
   const contentType = req.headers.get("content-type") || "";
   let text = "";
   if (contentType.includes("multipart/form-data")) {
@@ -17,6 +18,6 @@ export async function POST(req: NextRequest) {
     text = body.csv || body.text || "";
   }
   if (!text.trim()) return NextResponse.json({ error: "空文件" }, { status: 400 });
-  const result = await importCsv(text);
+  const result = await importCsv(text, user.id);
   return NextResponse.json(result);
 }

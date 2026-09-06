@@ -5,17 +5,17 @@ const prisma = new PrismaClient();
 
 async function main() {
   const passwordHash = await bcrypt.hash("admin12345", 10);
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { email: "admin@jianlian.local" },
-    update: { passwordHash, name: "管理员" },
-    create: { email: "admin@jianlian.local", passwordHash, name: "管理员" },
+    update: { passwordHash, name: "管理员", role: "ADMIN" },
+    create: { email: "admin@jianlian.local", passwordHash, name: "管理员", role: "ADMIN" },
   });
 
   await prisma.setting.upsert({
-    where: { id: "default" },
+    where: { userId: admin.id },
     update: {},
     create: {
-      id: "default",
+      userId: admin.id,
       brandName: "建联",
       industry: "汽车后市场配件",
       targetMarkets: "中东,非洲,东南亚,东欧,拉美",
@@ -24,10 +24,11 @@ async function main() {
     },
   });
 
-  let tpl = await prisma.emailTemplate.findFirst({ where: { name: "首封介绍" } });
+  let tpl = await prisma.emailTemplate.findFirst({ where: { name: "首封介绍", userId: admin.id } });
   if (!tpl) {
     tpl = await prisma.emailTemplate.create({
       data: {
+        userId: admin.id,
         name: "首封介绍",
         subject: "{{company}} 合作机会 — 写给 {{name}}",
         body: `Hi {{name}},
@@ -41,10 +42,11 @@ async function main() {
     });
   }
 
-  let sequence = await prisma.sequence.findFirst({ where: { name: "默认 4 触达" } });
+  let sequence = await prisma.sequence.findFirst({ where: { name: "默认 4 触达", userId: admin.id } });
   if (!sequence) {
     sequence = await prisma.sequence.create({
       data: {
+        userId: admin.id,
         name: "默认 4 触达",
         steps: [
           { type: "email", templateId: tpl.id },
@@ -59,7 +61,7 @@ async function main() {
     });
   }
 
-  if ((await prisma.contact.count()) > 0) {
+  if ((await prisma.contact.count({ where: { userId: admin.id } })) > 0) {
     console.log("seed: contacts exist, skip demo rows");
     return;
   }
@@ -240,7 +242,7 @@ async function main() {
 
   const created = [];
   for (const c of rows) {
-    const row = await prisma.contact.create({ data: c });
+    const row = await prisma.contact.create({ data: { ...c, userId: admin.id } });
     created.push(row);
     await prisma.activity.create({
       data: { contactId: row.id, type: "created", content: "种子数据建档" },
@@ -323,7 +325,7 @@ async function main() {
     },
   });
   await prisma.sendLog.create({
-    data: { channel: "email", createdAt: daysAgo(6) },
+    data: { userId: admin.id, channel: "email", createdAt: daysAgo(6) },
   });
 
   console.log("seed: admin + 8 contacts + 1 template + 1 sequence");

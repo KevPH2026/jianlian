@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser, unauthorized } from "@/lib/session";
+import { requireUser, unauthorized } from "@/lib/tenant";
 import { buildContactData } from "@/lib/contacts";
 import { STAGES } from "@/lib/stages";
 
 export async function GET(req: NextRequest) {
-  if (!(await requireUser())) return unauthorized();
+  const user = await requireUser();
+  if (!user) return unauthorized();
   const sp = req.nextUrl.searchParams;
   const q = sp.get("q")?.trim() || "";
   const stage = sp.get("stage") || "";
   const tag = sp.get("tag") || "";
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { userId: user.id };
   const and: Record<string, unknown>[] = [];
   if (stage && STAGES.includes(stage as (typeof STAGES)[number])) and.push({ stage });
   if (tag) and.push({ tags: { has: tag } });
@@ -31,13 +32,14 @@ export async function GET(req: NextRequest) {
     orderBy: [{ score: "desc" }, { updatedAt: "desc" }],
     take: 500,
   });
-  const tags = await prisma.contact.findMany({ select: { tags: true } });
+  const tags = await prisma.contact.findMany({ where: { userId: user.id }, select: { tags: true } });
   const allTags = Array.from(new Set(tags.flatMap((t) => t.tags))).sort();
   return NextResponse.json({ contacts, tags: allTags });
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireUser())) return unauthorized();
+  const user = await requireUser();
+  if (!user) return unauthorized();
   const body = await req.json();
   const data = buildContactData({
     name: body.name,
@@ -52,7 +54,7 @@ export async function POST(req: NextRequest) {
     doNotContact: body.doNotContact,
   });
   if (!data.name) return NextResponse.json({ error: "姓名必填" }, { status: 400 });
-  const contact = await prisma.contact.create({ data });
+  const contact = await prisma.contact.create({ data: { ...data, userId: user.id } });
   await prisma.activity.create({
     data: { contactId: contact.id, type: "note", content: "手动新建联系人" },
   });

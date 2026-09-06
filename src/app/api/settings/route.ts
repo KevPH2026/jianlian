@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireUser, unauthorized } from "@/lib/session";
+import { requireUser, unauthorized } from "@/lib/tenant";
 import { smtpConfigured } from "@/lib/mailer";
-import { getWhatsAppConfig, isWhatsAppConfigured } from "@/lib/whatsapp";
+import { getOrCreateSetting, getWhatsAppConfig, isWhatsAppConfigured } from "@/lib/whatsapp";
 
 export async function GET() {
-  if (!(await requireUser())) return unauthorized();
-  const cfg = await getWhatsAppConfig();
-  const setting = await prisma.setting.upsert({
-    where: { id: "default" },
-    update: {},
-    create: { id: "default", brandName: "建联", industry: "汽车后市场配件", targetMarkets: "中东,非洲,东南亚,东欧" },
-  });
+  const user = await requireUser();
+  if (!user) return unauthorized();
+  const cfg = await getWhatsAppConfig(user.id);
+  const setting = await getOrCreateSetting(user.id);
   return NextResponse.json({
     brand: {
       brandName: setting.brandName,
@@ -30,25 +27,22 @@ export async function GET() {
     },
     whatsapp: {
       configured: isWhatsAppConfigured(cfg),
-      phoneNumberId: cfg.phoneNumberId,
-      verifyToken: cfg.verifyToken,
-      apiVersion: cfg.apiVersion,
-      hasToken: Boolean(cfg.accessToken),
+      phoneNumberId: setting.waPhoneNumberId || cfg.phoneNumberId,
+      verifyToken: setting.waVerifyToken || cfg.verifyToken,
+      apiVersion: setting.waApiVersion || cfg.apiVersion,
+      hasToken: Boolean(setting.waAccessToken || cfg.accessToken),
       webhookPath: "/api/whatsapp/webhook",
     },
   });
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await requireUser())) return unauthorized();
+  const user = await requireUser();
+  if (!user) return unauthorized();
   const body = await req.json();
-  const current = await prisma.setting.upsert({
-    where: { id: "default" },
-    update: {},
-    create: { id: "default" },
-  });
+  const current = await getOrCreateSetting(user.id);
   const updated = await prisma.setting.update({
-    where: { id: "default" },
+    where: { userId: user.id },
     data: {
       brandName: body.brandName ?? current.brandName,
       industry: body.industry ?? current.industry,
