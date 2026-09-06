@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound, requireUser, unauthorized } from "@/lib/tenant";
 import { buildContactData } from "@/lib/contacts";
 import { pauseOnDoNotContact } from "@/lib/sequence";
-import { ALIGNED_STAGE, isStage } from "@/lib/stages";
+import { ALIGNED_STAGE, isStage, normalizeStage, type Stage } from "@/lib/stages";
 import { contactHasActiveBooking } from "@/lib/bookings";
 
 export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -34,9 +34,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   const prev = await prisma.contact.findFirst({ where: { id, userId: user.id } });
   if (!prev) return notFound();
 
-  const nextStage = body.stage !== undefined ? String(body.stage) : prev.stage;
-  if (body.stage !== undefined && !isStage(nextStage)) {
-    return NextResponse.json({ error: "无效阶段" }, { status: 400 });
+  let nextStage: Stage = normalizeStage(prev.stage);
+  if (body.stage !== undefined) {
+    const s = String(body.stage);
+    if (!isStage(s)) {
+      return NextResponse.json({ error: "无效阶段" }, { status: 400 });
+    }
+    nextStage = s;
   }
   if (nextStage === ALIGNED_STAGE && prev.stage !== ALIGNED_STAGE) {
     const has = await contactHasActiveBooking(user.id, id);
